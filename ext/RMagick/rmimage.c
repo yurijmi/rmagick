@@ -54,6 +54,14 @@ typedef Image *(scaler_t)(const Image *, const size_t, const size_t, ExceptionIn
 /** Method that transforms an image */
 typedef Image *(xformer_t)(const Image *, const RectangleInfo *, ExceptionInfo *);
 
+static VALUE morphology_channel(int, VALUE, VALUE, VALUE, VALUE, VALUE);
+static VALUE negate(int, int, VALUE *, VALUE);
+static VALUE threshold_bilevel(int, VALUE, VALUE);
+static VALUE transparent(int, int, VALUE *, VALUE);
+static VALUE level_colors(int, int, VALUE *, VALUE);
+static VALUE shadow(int, int, VALUE *, VALUE);
+static VALUE quantize(int, int, VALUE *, VALUE);
+static VALUE matte_flood_fill(int, int, VALUE *, VALUE);
 static VALUE cropper(int, int, VALUE *, VALUE);
 static VALUE effect_image(VALUE, int, VALUE *, effector_t);
 static VALUE flipflop(int, VALUE, flipper_t);
@@ -4375,6 +4383,18 @@ Image_morphology(VALUE self, VALUE method_v, VALUE iterations, VALUE kernel_v)
     return Image_morphology_channel(self, default_channels_const, method_v, iterations, kernel_v);
 }
 
+VALUE
+Image_morphology_bang(VALUE self, VALUE method_v, VALUE iterations, VALUE kernel_v)
+{
+    static VALUE default_channels_const = 0;
+
+    if(!default_channels_const) {
+        default_channels_const = rb_const_get(Module_Magick, rb_intern("DefaultChannels"));
+    }
+    
+    return Image_morphology_channel_bang(self, default_channels_const, method_v, iterations, kernel_v);
+}
+
 /**
  * Apply a user supplied kernel to the image channel according to the given mophology method.
  *
@@ -4390,6 +4410,18 @@ Image_morphology(VALUE self, VALUE method_v, VALUE iterations, VALUE kernel_v)
 
 VALUE
 Image_morphology_channel(VALUE self, VALUE channel_v, VALUE method_v, VALUE iterations, VALUE kernel_v)
+{
+    return morphology_channel(False, self, channel_v, method_v, iterations, kernel_v);
+}
+
+VALUE
+Image_morphology_channel_bang(VALUE self, VALUE channel_v, VALUE method_v, VALUE iterations, VALUE kernel_v)
+{
+    return morphology_channel(True, self, channel_v, method_v, iterations, kernel_v);
+}
+
+static VALUE
+morphology_channel(int bang, VALUE self, VALUE channel_v, VALUE method_v, VALUE iterations, VALUE kernel_v)
 {
     Image *image, *new_image;
     ExceptionInfo *exception;
@@ -4427,6 +4459,13 @@ Image_morphology_channel(VALUE self, VALUE channel_v, VALUE method_v, VALUE iter
 #endif
     rm_check_exception(exception, new_image, DestroyOnError);
     DestroyExceptionInfo(exception);
+
+    if (bang)
+    {
+        UPDATE_DATA_PTR(self, new_image);
+        (void) rm_image_destroy(image);
+        return self;
+    }
 
     return rm_image_new(new_image);
 }
@@ -8229,6 +8268,18 @@ Image_level_channel(int argc, VALUE *argv, VALUE self)
 VALUE
 Image_level_colors(int argc, VALUE *argv, VALUE self)
 {
+    return level_colors(False, argc, argv, self);
+}
+
+VALUE
+Image_level_colors_bang(int argc, VALUE *argv, VALUE self)
+{
+    return level_colors(True, argc, argv, self);
+}
+
+static VALUE
+level_colors(int bang, int argc, VALUE *argv, VALUE self)
+{
     Image *image, *new_image;
     MagickPixel black_color, white_color;
     ChannelType channels;
@@ -8269,26 +8320,47 @@ Image_level_colors(int argc, VALUE *argv, VALUE self)
             raise_ChannelType_error(argv[argc-1]);
             break;
     }
-
-    new_image = rm_clone_image(image);
+    
+    if (bang) {
+#if defined(IMAGEMAGICK_7)
+        exception = AcquireExceptionInfo();
+        BEGIN_CHANNEL_MASK(image, channels);
+        status = LevelImageColors(image, &black_color, &white_color, invert, exception);
+        END_CHANNEL_MASK(image);
+        rm_check_exception(exception, image, DestroyOnError);
+        DestroyExceptionInfo(exception);
+#else
+        status = LevelColorsImageChannel(image, channels, &black_color, &white_color, invert);
+        rm_check_image_exception(image, DestroyOnError);
+#endif
+    }
+    else {
+        new_image = rm_clone_image(image);
 
 #if defined(IMAGEMAGICK_7)
-    exception = AcquireExceptionInfo();
-    BEGIN_CHANNEL_MASK(new_image, channels);
-    status = LevelImageColors(new_image, &black_color, &white_color, invert, exception);
-    END_CHANNEL_MASK(new_image);
-    rm_check_exception(exception, new_image, DestroyOnError);
-    DestroyExceptionInfo(exception);
+        exception = AcquireExceptionInfo();
+        BEGIN_CHANNEL_MASK(new_image, channels);
+        status = LevelImageColors(new_image, &black_color, &white_color, invert, exception);
+        END_CHANNEL_MASK(new_image);
+        rm_check_exception(exception, new_image, DestroyOnError);
+        DestroyExceptionInfo(exception);
 #else
-    status = LevelColorsImageChannel(new_image, channels, &black_color, &white_color, invert);
-    rm_check_image_exception(new_image, DestroyOnError);
+        status = LevelColorsImageChannel(new_image, channels, &black_color, &white_color, invert);
+        rm_check_image_exception(new_image, DestroyOnError);
 #endif
+    }
+    
     if (!status)
     {
         rb_raise(rb_eRuntimeError, "LevelImageColors failed for unknown reason.");
     }
-
-    return rm_image_new(new_image);
+    
+    if (bang) {
+        return self;
+    }
+    else {
+        return rm_image_new(new_image);
+    }
 }
 
 
@@ -8922,6 +8994,18 @@ Image_matte_color_eq(VALUE self, VALUE color)
 VALUE
 Image_matte_flood_fill(int argc, VALUE *argv, VALUE self)
 {
+    return matte_flood_fill(False, argc, argv, self);
+}
+
+VALUE
+Image_matte_flood_fill_bang(int argc, VALUE *argv, VALUE self)
+{
+    return matte_flood_fill(True, argc, argv, self);
+}
+
+static VALUE
+matte_flood_fill(int bang, int argc, VALUE *argv, VALUE self)
+{
     Image *image, *new_image;
     PixelColor target;
     Quantum alpha;
@@ -8988,22 +9072,42 @@ Image_matte_flood_fill(int argc, VALUE *argv, VALUE self)
         target_mpp.blue  = (MagickRealType) target.blue;
     }
 
+    if (bang) {
 #if defined(IMAGEMAGICK_7)
-    exception = AcquireExceptionInfo();
-    BEGIN_CHANNEL_MASK(new_image, OpacityChannel);
-    FloodfillPaintImage(new_image, draw_info, &target_mpp, x, y, invert, exception);
-    END_CHANNEL_MASK(new_image);
-    DestroyDrawInfo(draw_info);
-    rm_check_exception(exception, new_image, DestroyOnError);
-    DestroyExceptionInfo(exception);
+        exception = AcquireExceptionInfo();
+        BEGIN_CHANNEL_MASK(image, OpacityChannel);
+        FloodfillPaintImage(image, draw_info, &target_mpp, x, y, invert, exception);
+        END_CHANNEL_MASK(image);
+        DestroyDrawInfo(draw_info);
+        rm_check_exception(exception, image, DestroyOnError);
+        DestroyExceptionInfo(exception);
 #else
-    FloodfillPaintImage(new_image, OpacityChannel, draw_info, &target_mpp, x, y, invert);
-    DestroyDrawInfo(draw_info);
+        FloodfillPaintImage(image, OpacityChannel, draw_info, &target_mpp, x, y, invert);
+        DestroyDrawInfo(draw_info);
 
-    rm_check_image_exception(new_image, DestroyOnError);
+        rm_check_image_exception(image, DestroyOnError);
+#endif
+        
+        return self;
+    }
+    else {
+#if defined(IMAGEMAGICK_7)
+        exception = AcquireExceptionInfo();
+        BEGIN_CHANNEL_MASK(new_image, OpacityChannel);
+        FloodfillPaintImage(new_image, draw_info, &target_mpp, x, y, invert, exception);
+        END_CHANNEL_MASK(new_image);
+        DestroyDrawInfo(draw_info);
+        rm_check_exception(exception, new_image, DestroyOnError);
+        DestroyExceptionInfo(exception);
+#else
+        FloodfillPaintImage(new_image, OpacityChannel, draw_info, &target_mpp, x, y, invert);
+        DestroyDrawInfo(draw_info);
+
+        rm_check_image_exception(new_image, DestroyOnError);
 #endif
 
-    return rm_image_new(new_image);
+        return rm_image_new(new_image);
+    }
 }
 
 
@@ -9319,6 +9423,18 @@ Image_motion_blur(int argc, VALUE *argv, VALUE self)
 VALUE
 Image_negate(int argc, VALUE *argv, VALUE self)
 {
+    return negate(False, argc, argv, self);
+}
+
+VALUE
+Image_negate_bang(int argc, VALUE *argv, VALUE self)
+{
+    return negate(True, argc, argv, self);
+}
+
+static VALUE
+negate(int bang, int argc, VALUE *argv, VALUE self)
+{
     Image *image, *new_image;
     unsigned int grayscale = MagickFalse;
 #if defined(IMAGEMAGICK_7)
@@ -9333,6 +9449,21 @@ Image_negate(int argc, VALUE *argv, VALUE self)
     else if (argc > 1)
     {
         rb_raise(rb_eArgError, "wrong number of arguments (%d for 0 or 1)", argc);
+    }
+
+    if (bang)
+    {
+#if defined(IMAGEMAGICK_7)
+        exception = AcquireExceptionInfo();
+        NegateImage(image, grayscale, exception);
+        rm_check_exception(exception, image, DestroyOnError);
+        DestroyExceptionInfo(exception);
+#else
+        NegateImage(image, grayscale);
+        rm_check_image_exception(image, DestroyOnError);
+#endif
+
+        return self;
     }
 
     new_image = rm_clone_image(image);
@@ -10737,6 +10868,18 @@ Image_quantum_operator(int argc, VALUE *argv, VALUE self)
 VALUE
 Image_quantize(int argc, VALUE *argv, VALUE self)
 {
+    return quantize(False, argc, argv, self);
+}
+
+VALUE
+Image_quantize_bang(int argc, VALUE *argv, VALUE self)
+{
+    return quantize(True, argc, argv, self);
+}
+
+static VALUE
+quantize(int bang, int argc, VALUE *argv, VALUE self)
+{
     Image *image, *new_image;
     QuantizeInfo quantize_info;
 #if defined(IMAGEMAGICK_7)
@@ -10778,20 +10921,35 @@ Image_quantize(int argc, VALUE *argv, VALUE self)
             rb_raise(rb_eArgError, "wrong number of arguments (%d for 0 to 5)", argc);
             break;
     }
-
-    new_image = rm_clone_image(image);
+    
+    if (bang) {
+#if defined(IMAGEMAGICK_7)
+        exception = AcquireExceptionInfo();
+        QuantizeImage(&quantize_info, image, exception);
+        rm_check_exception(exception, image, DestroyOnError);
+        DestroyExceptionInfo(exception);
+#else
+        QuantizeImage(&quantize_info, image);
+        rm_check_image_exception(image, DestroyOnError);
+#endif
+        
+        return self;
+    }
+    else {
+        new_image = rm_clone_image(image);
 
 #if defined(IMAGEMAGICK_7)
-    exception = AcquireExceptionInfo();
-    QuantizeImage(&quantize_info, new_image, exception);
-    rm_check_exception(exception, new_image, DestroyOnError);
-    DestroyExceptionInfo(exception);
+        exception = AcquireExceptionInfo();
+        QuantizeImage(&quantize_info, new_image, exception);
+        rm_check_exception(exception, new_image, DestroyOnError);
+        DestroyExceptionInfo(exception);
 #else
-    QuantizeImage(&quantize_info, new_image);
-    rm_check_image_exception(new_image, DestroyOnError);
+        QuantizeImage(&quantize_info, new_image);
+        rm_check_image_exception(new_image, DestroyOnError);
 #endif
 
-    return rm_image_new(new_image);
+        return rm_image_new(new_image);
+    }
 }
 
 
@@ -12465,6 +12623,18 @@ Image_shade(int argc, VALUE *argv, VALUE self)
 VALUE
 Image_shadow(int argc, VALUE *argv, VALUE self)
 {
+    return shadow(False, argc, argv, self);
+}
+
+VALUE
+Image_shadow_bang(int argc, VALUE *argv, VALUE self)
+{
+    return shadow(True, argc, argv, self);
+}
+
+static VALUE
+shadow(int bang, int argc, VALUE *argv, VALUE self)
+{
     Image *image, *new_image;
     double alpha = 100.0;
     double sigma = 4.0;
@@ -12502,6 +12672,13 @@ Image_shadow(int argc, VALUE *argv, VALUE self)
     rm_check_exception(exception, new_image, DestroyOnError);
     DestroyExceptionInfo(exception);
 
+    if (bang)
+    {
+        UPDATE_DATA_PTR(self, new_image);
+        (void) rm_image_destroy(image);
+        return self;
+    }
+    
     return rm_image_new(new_image);
 }
 
@@ -13608,6 +13785,18 @@ Image_texture_flood_fill(VALUE self, VALUE color_obj, VALUE texture_obj,
 VALUE
 Image_threshold(VALUE self, VALUE threshold_obj)
 {
+    return threshold_bilevel(False, self, threshold_obj);
+}
+
+VALUE
+Image_threshold_bang(VALUE self, VALUE threshold_obj)
+{
+    return threshold_bilevel(True, self, threshold_obj);
+}
+
+static VALUE
+threshold_bilevel(int bang, VALUE self, VALUE threshold_obj)
+{
     Image *image, *new_image;
     double threshold = NUM2DBL(threshold_obj);
 #if defined(IMAGEMAGICK_7)
@@ -13615,6 +13804,21 @@ Image_threshold(VALUE self, VALUE threshold_obj)
 #endif
 
     image = rm_check_destroyed(self);
+
+    if (bang) {
+#if defined(IMAGEMAGICK_7)
+        exception = AcquireExceptionInfo();
+        BilevelImage(image, threshold, exception);
+        rm_check_exception(exception, image, DestroyOnError);
+        DestroyExceptionInfo(exception);
+#else
+        BilevelImageChannel(image, DefaultChannels, threshold);
+        rm_check_image_exception(image, DestroyOnError);
+#endif
+
+        return self;
+    }
+    
     new_image = rm_clone_image(image);
 
 #if defined(IMAGEMAGICK_7)
@@ -14122,6 +14326,18 @@ Image_total_ink_density(VALUE self)
 VALUE
 Image_transparent(int argc, VALUE *argv, VALUE self)
 {
+    return transparent(False, argc, argv, self);
+}
+
+VALUE
+Image_transparent_bang(int argc, VALUE *argv, VALUE self)
+{
+    return transparent(True, argc, argv, self);
+}
+
+static VALUE
+transparent(int bang, int argc, VALUE *argv, VALUE self)
+{
     Image *image, *new_image;
     MagickPixel color;
     Quantum alpha = TransparentAlpha;
@@ -14144,26 +14360,49 @@ Image_transparent(int argc, VALUE *argv, VALUE self)
             rb_raise(rb_eArgError, "wrong number of arguments (%d for 1 or 2)", argc);
             break;
     }
+    
+    if (bang) {
+#if defined(IMAGEMAGICK_7)
+        exception = AcquireExceptionInfo();
+        okay = TransparentPaintImage(image, &color, alpha, MagickFalse, exception);
+        rm_check_exception(exception, image, DestroyOnError);
+        DestroyExceptionInfo(exception);
+#else
+        okay = TransparentPaintImage(image, &color, QuantumRange - alpha, MagickFalse);
+        rm_check_image_exception(image, DestroyOnError);
+#endif
 
-    new_image = rm_clone_image(image);
+        if (!okay)
+        {
+            // Force exception
+            DestroyImage(image);
+            rm_magick_error("TransparentPaintImage failed with no explanation");
+        }
+        
+        return self;
+    }
+    else {
+        new_image = rm_clone_image(image);
 
 #if defined(IMAGEMAGICK_7)
-    exception = AcquireExceptionInfo();
-    okay = TransparentPaintImage(new_image, &color, alpha, MagickFalse, exception);
-    rm_check_exception(exception, new_image, DestroyOnError);
-    DestroyExceptionInfo(exception);
+        exception = AcquireExceptionInfo();
+        okay = TransparentPaintImage(new_image, &color, alpha, MagickFalse, exception);
+        rm_check_exception(exception, new_image, DestroyOnError);
+        DestroyExceptionInfo(exception);
 #else
-    okay = TransparentPaintImage(new_image, &color, QuantumRange - alpha, MagickFalse);
-    rm_check_image_exception(new_image, DestroyOnError);
+        okay = TransparentPaintImage(new_image, &color, QuantumRange - alpha, MagickFalse);
+        rm_check_image_exception(new_image, DestroyOnError);
 #endif
-    if (!okay)
-    {
-        // Force exception
-        DestroyImage(new_image);
-        rm_magick_error("TransparentPaintImage failed with no explanation");
-    }
+        
+        if (!okay)
+        {
+            // Force exception
+            DestroyImage(new_image);
+            rm_magick_error("TransparentPaintImage failed with no explanation");
+        }
 
-    return rm_image_new(new_image);
+        return rm_image_new(new_image);
+    }
 }
 
 

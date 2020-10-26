@@ -457,7 +457,9 @@ Init_RMagick2(void)
     rb_define_method(Class_Image, "convolve", Image_convolve, 2);
     rb_define_method(Class_Image, "convolve_channel", Image_convolve_channel, -1);
     rb_define_method(Class_Image, "morphology", Image_morphology, 3);
+    rb_define_method(Class_Image, "morphology!", Image_morphology_bang, 3);
     rb_define_method(Class_Image, "morphology_channel", Image_morphology_channel, 4);
+    rb_define_method(Class_Image, "morphology_channel!", Image_morphology_channel_bang, 3);
     rb_define_method(Class_Image, "copy", Image_copy, 0);
     rb_define_method(Class_Image, "crop", Image_crop, -1);
     rb_define_method(Class_Image, "crop!", Image_crop_bang, -1);
@@ -515,6 +517,7 @@ Init_RMagick2(void)
     rb_define_method(Class_Image, "level2", Image_level2, -1);
     rb_define_method(Class_Image, "level_channel", Image_level_channel, -1);
     rb_define_method(Class_Image, "level_colors", Image_level_colors, -1);
+    rb_define_method(Class_Image, "level_colors!", Image_level_colors_bang, -1);
     rb_define_method(Class_Image, "levelize_channel", Image_levelize_channel, -1);
     rb_define_method(Class_Image, "linear_stretch", Image_linear_stretch, -1);
     rb_define_method(Class_Image, "liquid_rescale", Image_liquid_rescale, -1);
@@ -524,6 +527,7 @@ Init_RMagick2(void)
     rb_define_method(Class_Image, "marshal_load", Image_marshal_load, 1);
     rb_define_method(Class_Image, "mask", Image_mask, -1);
     rb_define_method(Class_Image, "matte_flood_fill", Image_matte_flood_fill, -1);
+    rb_define_method(Class_Image, "matte_flood_fill!", Image_matte_flood_fill_bang, -1);
     rb_define_method(Class_Image, "median_filter", Image_median_filter, -1);
     rb_define_method(Class_Image, "minify", Image_minify, 0);
     rb_define_method(Class_Image, "minify!", Image_minify_bang, 0);
@@ -531,6 +535,7 @@ Init_RMagick2(void)
     rb_define_method(Class_Image, "monochrome?", Image_monochrome_q, 0);
     rb_define_method(Class_Image, "motion_blur", Image_motion_blur, -1);
     rb_define_method(Class_Image, "negate", Image_negate, -1);
+    rb_define_method(Class_Image, "negate!", Image_negate_bang, -1);
     rb_define_method(Class_Image, "negate_channel", Image_negate_channel, -1);
     rb_define_method(Class_Image, "normalize", Image_normalize, 0);
     rb_define_method(Class_Image, "normalize_channel", Image_normalize_channel, -1);
@@ -548,6 +553,7 @@ Init_RMagick2(void)
     rb_define_method(Class_Image, "preview", Image_preview, 1);
     rb_define_method(Class_Image, "profile!", Image_profile_bang, 2);
     rb_define_method(Class_Image, "quantize", Image_quantize, -1);
+    rb_define_method(Class_Image, "quantize!", Image_quantize_bang, -1);
     rb_define_method(Class_Image, "quantum_operator", Image_quantum_operator, -1);
     rb_define_method(Class_Image, "radial_blur", Image_radial_blur, 1);
     rb_define_method(Class_Image, "radial_blur_channel", Image_radial_blur_channel, -1);
@@ -573,6 +579,7 @@ Init_RMagick2(void)
     rb_define_method(Class_Image, "set_channel_depth", Image_set_channel_depth, 2);
     rb_define_method(Class_Image, "shade", Image_shade, -1);
     rb_define_method(Class_Image, "shadow", Image_shadow, -1);
+    rb_define_method(Class_Image, "shadow!", Image_shadow_bang, -1);
     rb_define_method(Class_Image, "sharpen", Image_sharpen, -1);
     rb_define_method(Class_Image, "sharpen_channel", Image_sharpen_channel, -1);
     rb_define_method(Class_Image, "shave", Image_shave, 2);
@@ -593,12 +600,14 @@ Init_RMagick2(void)
     rb_define_method(Class_Image, "swirl", Image_swirl, 1);
     rb_define_method(Class_Image, "texture_flood_fill", Image_texture_flood_fill, 5);
     rb_define_method(Class_Image, "threshold", Image_threshold, 1);
+    rb_define_method(Class_Image, "threshold!", Image_threshold_bang, 1);
     rb_define_method(Class_Image, "thumbnail", Image_thumbnail, -1);
     rb_define_method(Class_Image, "thumbnail!", Image_thumbnail_bang, -1);
     rb_define_method(Class_Image, "tint", Image_tint, -1);
     rb_define_method(Class_Image, "to_color", Image_to_color, 1);
     rb_define_method(Class_Image, "to_blob", Image_to_blob, 0);
     rb_define_method(Class_Image, "transparent", Image_transparent, -1);
+    rb_define_method(Class_Image, "transparent!", Image_transparent_bang, -1);
     rb_define_method(Class_Image, "transparent_chroma", Image_transparent_chroma, -1);
     rb_define_method(Class_Image, "transpose", Image_transpose, 0);
     rb_define_method(Class_Image, "transpose!", Image_transpose_bang, 0);
